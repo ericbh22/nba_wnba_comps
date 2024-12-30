@@ -46,7 +46,13 @@ class Player:
         attempt_scalar = 2 / (1 + math.exp(-self.three_pt_attempt)) - 1
         self.three_pt_prof = self.three_pt_percentage * attempt_scalar
         self.mp = self.player_stats['MIN'] 
-        self.height = self.player_info['HEIGHT']
+        self.height = self.player_info['HEIGHT'][0]
+
+        if len(self.height) == 3:
+            self.height = int(self.height[0]) * 30.48 + int(self.height[2]) * 2.54
+        else:
+            self.height = int(self.height[0]) * 30.48 + int(self.height[2:]) * 2.54
+
         self.weight = self.player_info['WEIGHT']
         self.field_goal_percentage = self.player_stats['FG_PCT']
         try:
@@ -64,8 +70,6 @@ class Player:
         self.padded_free_throw_percentage = ((self.standardised_free_throw_percentage + 3) / 6 )* 100
         self.blended_percentage = (5* self.padded_three_pt_percentage + self.padded_free_throw_percentage) / 6 
         self.spacing = (self.three_pt_attempt * (((self.three_pt_percentage*1.5)*1.5)-0.535))
-        # self.padded_three_pt_percentage = min(max(self.padded_three_pt_percentage, 0), 100) # clamped between 0 and 100, now people cant go under 0 but can still go over 100
-        # self.padded_free_throw_percentage = min(max(self.padded_free_throw_percentage, 0), 100)
         self.shooting_splits = playerdashboardbyshootingsplits.PlayerDashboardByShootingSplits(player_id = self.player_id, season=year).get_data_frames()[2] # define specific season and years 
         self.filtered_splits = []
         for index, row in self.shooting_splits.iterrows(): # looping through pandas dataframes
@@ -90,7 +94,8 @@ class Player:
         self.box_creation = self.find_box_creation()
         self.offensive_load = self.find_offensive_load()
         self.usage_rate = self.find_usage_rate()
-
+        self.accum = [self.shooting_quality, self.box_creation,self.offensive_load,self.usage_rate,self.height,self.wingspan,self.spacing,self.filtered_splits]
+    
     """
     Usage and creation metrics calculators
     """
@@ -177,7 +182,7 @@ class Player:
             raise ValueError(f"Team stats for team_id {self.team_id} not found in season {year}.")
 
 
-
+    
     
     def __str__(self):
         #return f"Player: {self.name}, Box Creation: {self.box_creation}, Offensive Load: {self.offensive_load}, Usage Rate: {self.usage_rate} Height: {self.height}, Weight: {self.weight}, wingspan: {self.wingspan} " # im getting a weird output here, its a pandas dframe?
@@ -190,57 +195,45 @@ class Player:
 # testcases
 lebron = Player("LeBron James","2019-20")
 print(lebron)
+davis = Player("Anthony Davis","2019-20")
+# start our comparison function
+def fraction_converter(stat1,stat2):
+    stat1 = int(stat1)
+    stat2 = int(stat2)
+    if stat2 > stat1:
+        return stat1/stat2 * 100
+    else:
+        return (stat2 / stat1) * 100
+def splits_converter(split1,split2):
+    total = 0 
+    for i in range(len(split1)):
+        if split1[i] > split2[i]:
+            total = total + ((split2[i] / split1[i]) * 100)
+        else:
+            total = total + ((split1[i] / split2[i]) * 100)
+    return total / len(split1)
+            
+def compare_players(player1: Type[Player], player2: Type[Player]):
+    # Compare the box creation of two players
 
-curry = Player("Stephen Curry","2024-25")
-print(curry)
+    # print(f"Comparing {player1.name} and {player2.name}:")
+    # print(f"Box Creation: {player1.box_creation} vs. {player2.box_creation}")
+    # print(f"Offensive Load: {player1.offensive_load} vs. {player2.offensive_load}")
+    # print(f"Usage Rate: {player1.usage_rate} vs. {player2.usage_rate}")
+    # print(f"Height: {player1.height} vs. {player2.height}")
+    # print(f"wingspan: {player1.wingspan} vs. {player2.wingspan}")
+    # print(f"spacing: {player1.spacing} vs. {player2.spacing}")
+    # print(f"splits {player1.filtered_splits} vs {player2.filtered_splits}")
+    # get these numbers, and then find how similar they are to the player 1, so fractions of the player 1 stats, depending on whos bigger 
+    total = 0
+    for i in range(0,len(player1.accum)-1):
+        total = total + fraction_converter(player1.accum[i],player2.accum[i])
+    total = total + splits_converter(player1.filtered_splits,player2.filtered_splits)
+    return total / len(player1.accum)
 
-# looping thru all current players will be a thing in and of itself 
+#print(compare_players(lebron,davis)) # this is a test case to see if the function works, it should return the same values for both players
 
-# westbrook = Player("Russell Westbrook","2016-17")
-# print(westbrook)
-# paul = Player("Chris Paul","2013-14")
-# print(paul)
+korver = Player("Kyle Korver","2017-18")
+thompson = Player("Klay Thompson","2017-18")
 
-"""
-lebron_james = {
-  'id': 2544,
-  'full_name': 'LeBron James',
-  'first_name': 'LeBron',
-  'last_name': 'James',
-  'is_active': True
-}
-example output for lebron james
-"""
-# def get_player_shotchart_details(name, season_id):
-#     nba_players = players.get_players()
-#     player_dict = [player for player in nba_players if player['full_name'] == name][0]
-#     career = PlayerCareerStats(player_dict['id'])
-#     career_stats =  career.get_data_frames()[0]
-#     team_id = career_stats[career_stats['SEASON_ID'] == season_id]['TEAM_ID'] # basically what this does is it goes thru every column and finds the season id of trhe correct season and then gets the team id for that season
-
-#     shortchartlist = shotchartdetail.ShotChartDetail(team_id = int(team_id), player_id = int(player_dict["id"]), season_type_all_star = "Regular Season", season_nullable = season_id, context_measure_simple = 'FGA').get_data_frames()
-#     return shortchartlist[0], shortchartlist[1]
-# def wnba_shortchart_details(name, season_id):
-#     nba_players = players.get_wnba_players()
-#     player_dict = [player for player in nba_players if player['full_name'] == name][0]
-#     career = PlayerCareerStats(player_dict['id'])
-#     career_stats =  career.get_data_frames()[0]
-#     team_id = career_stats[career_stats['SEASON_ID'] == season_id]['TEAM_ID'] # basically what this does is it goes thru every column and finds the season id of trhe correct season and then gets the team id for that season
-
-#     shortchartlist = shotchartdetail.ShotChartDetail(team_id = int(team_id), player_id = int(player_dict["id"]), season_type_all_star = "Regular Season", season_nullable = season_id, context_measure_simple = 'FGA').get_data_frames()
-#     return shortchartlist[0], shortchartlist[1]
-# get_player_shotchart_details('LeBron James', '2021-22')
-# wnba_shortchart_details('Diana Taurasi', '2022-23')
-# def get_player_info(name):
-#     player = [player for player in players.get_players() if player['full_name'] == name][0]
-#     player_info = commonplayerinfo.CommonPlayerInfo(player_id=player['id'])
-#     return player_info.get_data_frames()[0]
-#WNBA stuff doesnt work yet, will need to webscrape, for now lets try automate the lebron thingo 
-
-# if __name__ == "__main__":
-#     player = Player("LeBron James","2019-20")
-#     print(f"Padded 3P%: {player.padded_three_pt_percentage}")
-#     print(f"Padded FT%: {player.padded_free_throw_percentage}")
-#     print(f"Blended Percentage: {player.blended_percentage}")
-#     print(f"Normalized Spacing: {player.spacing}")
-#     print(f"Shooting Quality: {player.shooting_quality}")
+print(compare_players(korver,thompson)) # this is a test case to see if the function works, it should return the same values for both players
